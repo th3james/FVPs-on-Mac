@@ -1,0 +1,57 @@
+# syntax=docker/dockerfile:1
+FROM ubuntu:22.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Install required dependencies using cache mounts for efficiency
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        gnupg \
+        jq \
+        libatomic1 \
+        software-properties-common \
+        && rm -rf /var/lib/apt/lists/*
+
+# Install additional dependencies including Python 3.9
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    add-apt-repository -y ppa:deadsnakes/ppa && \
+    apt-get install -y --no-install-recommends \
+        libpython3.9 \
+        x11-apps \
+        xterm \
+        telnet \
+        && rm -rf /var/lib/apt/lists/*
+
+# Build arguments for FVP installation
+ARG FVP_VERSION
+ARG FVP_BASE_URL
+ARG FVP_ARCHIVE
+
+# Install FVP Corstone-1000
+COPY FVP_Corstone_1000_11.23_25_Linux64_armv8l/FVP_Corstone_1000.sh /tmp/FVP_Corstone_1000.sh
+RUN chmod +x /tmp/FVP_Corstone_1000.sh && \
+    /tmp/FVP_Corstone_1000.sh --i-agree-to-the-contained-eula --no-interactive --destination /opt/corstone-1000 && \
+    rm /tmp/FVP_Corstone_1000.sh
+
+# User setup for non-root execution
+ARG USERNAME=root
+ARG USERID=0
+
+RUN if [ "${USERID}" -ne 0 ]; then \
+        groupadd -g ${USERID} ${USERNAME} && \
+        useradd -l -r -u ${USERID} -g ${USERNAME} ${USERNAME}; \
+    fi
+
+USER ${USERNAME}
+
+# Add FVP binaries to PATH
+ENV PATH=$PATH:/opt/corstone-1000/bin:/opt/corstone-1000/models/Linux64_armv8l_GCC-9.3
+
+# Set working directory
+WORKDIR /workspace
+
+# Default command
+CMD ["/bin/bash"]
