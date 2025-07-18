@@ -13,19 +13,45 @@ echo "This will take a significant amount of time (30-60 minutes or more)"
 echo "Output will be saved to: $OUTPUT_DIR"
 echo ""
 
-# Build the Docker image
-echo "Building Docker image..."
-docker build -f build-yocto.Dockerfile -t "$IMAGE_NAME" .
+# Build the Docker image (if not already built)
+if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+    echo "Building Docker image..."
+    docker build -f build-yocto.Dockerfile -t "$IMAGE_NAME" .
+else
+    echo "Docker image '$IMAGE_NAME' already exists, skipping build..."
+fi
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
 
-# Run the container to extract images
+# Create a temporary container to extract files
 echo ""
-echo "Extracting built images..."
-docker run --rm \
-    -v "$OUTPUT_DIR:/output" \
-    "$IMAGE_NAME"
+echo "Extracting built images using docker cp..."
+CONTAINER_ID=$(docker create "$IMAGE_NAME")
+
+# Define the source directory in the container
+DEPLOY_DIR="/workspace/build/tmp/deploy/images/corstone1000-fvp"
+
+# List of files to extract
+FILES=(
+    "bl1.bin"
+    "es_flashfw.bin"
+    "corstone1000-image-corstone1000-fvp.wic.nopt"
+    "corstone1000-flash-firmware-image-corstone1000-fvp.wic"
+    "cc312_otp.bin"
+)
+
+# Extract each file if it exists
+for file in "${FILES[@]}"; do
+    if docker cp "$CONTAINER_ID:$DEPLOY_DIR/$file" "$OUTPUT_DIR/" 2>/dev/null; then
+        echo "✓ Extracted $file"
+    else
+        echo "✗ $file not found, skipping"
+    fi
+done
+
+# Clean up the temporary container
+docker rm "$CONTAINER_ID" >/dev/null
 
 echo ""
 echo "Build complete! Images are available in: $OUTPUT_DIR"
