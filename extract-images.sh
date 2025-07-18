@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Script to build Corstone-1000 images and extract them to host
 # This script orchestrates the Docker build and extraction process
@@ -14,11 +14,9 @@ echo "Output will be saved to: $OUTPUT_DIR"
 echo ""
 
 # Build the Docker image (if not already built)
-if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
-    echo "Building Docker image..."
-    docker build -f build-yocto.Dockerfile -t "$IMAGE_NAME" .
-else
-    echo "Docker image '$IMAGE_NAME' already exists, skipping build..."
+if ! docker build -f build-yocto.Dockerfile -t "$IMAGE_NAME" .; then
+    echo "Error: Failed to build Docker image" >&2
+    exit 1
 fi
 
 # Create output directory
@@ -27,7 +25,14 @@ mkdir -p "$OUTPUT_DIR"
 # Create a temporary container to extract files
 echo ""
 echo "Extracting built images using docker cp..."
-CONTAINER_ID=$(docker create "$IMAGE_NAME")
+CONTAINER_ID=$(docker create -q "$IMAGE_NAME")
+
+# Validate the deployment directory exists in the container
+if ! docker exec "$CONTAINER_ID" test -d "$DEPLOY_DIR"; then
+    echo "Error: Deployment directory $DEPLOY_DIR not found in container" >&2
+    docker rm "$CONTAINER_ID" >/dev/null
+    exit 1
+fi
 
 # Define the source directory in the container
 DEPLOY_DIR="/workspace/build/tmp/deploy/images/corstone1000-fvp"
@@ -61,16 +66,18 @@ ls -la "$OUTPUT_DIR/"
 
 echo ""
 echo "To run the FVP with these images, use:"
-echo "docker run -it --rm \\"
-echo "  -v '$OUTPUT_DIR:/images' \\"
-echo "  fvp-corstone-1000 \\"
-echo "  /opt/corstone-1000/models/Linux64_armv8l_GCC-9.3/FVP_Corstone-1000 \\"
-echo "  -C diagnostics=4 \\"
-echo "  -C se.trustedBootROMloader.fname='/images/bl1.bin' \\"
-echo "  -C se.trustedSRAM_config=6 \\"
-echo "  -C se.BootROM_config='3' \\"
-echo "  --data board.flash0='/images/corstone1000-image-corstone1000-fvp.wic.nopt@0x68050000' \\"
-echo "  -C board.xnvm_size=64 \\"
-echo "  -C board.smsc_91c111.enabled=1 \\"
-echo "  -C board.hostbridge.userNetworking=true \\"
-echo "  -C board.se_flash_size=8192"
+cat << EOF
+docker run -it --rm \\
+  -v '$OUTPUT_DIR:/images' \\
+  fvp-corstone-1000 \\
+  /opt/corstone-1000/models/Linux64_armv8l_GCC-9.3/FVP_Corstone-1000 \\
+  -C diagnostics=4 \\
+  -C se.trustedBootROMloader.fname='/images/bl1.bin' \\
+  -C se.trustedSRAM_config=6 \\
+  -C se.BootROM_config='3' \\
+  --data board.flash0='/images/corstone1000-image-corstone1000-fvp.wic.nopt@0x68050000' \\
+  -C board.xnvm_size=64 \\
+  -C board.smsc_91c111.enabled=1 \\
+  -C board.hostbridge.userNetworking=true \\
+  -C board.se_flash_size=8192
+EOF
