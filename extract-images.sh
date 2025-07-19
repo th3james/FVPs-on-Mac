@@ -23,38 +23,29 @@ fi
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
 
+# Define the source directory in the container
+DEPLOY_DIR="/workspace/build/tmp/deploy/images/corstone1000-fvp"
+
 # Create a temporary container to extract files
 echo ""
 echo "Extracting built images using docker cp..."
 CONTAINER_ID=$(docker create -q "$IMAGE_NAME")
 
-# Validate the deployment directory exists in the container
-if ! docker exec "$CONTAINER_ID" test -d "$DEPLOY_DIR"; then
-    echo "Error: Deployment directory $DEPLOY_DIR not found in container" >&2
-    docker rm "$CONTAINER_ID" >/dev/null
-    exit 1
-fi
-
-# Define the source directory in the container
-DEPLOY_DIR="/workspace/build/tmp/deploy/images/corstone1000-fvp"
-
-# List of files to extract
-FILES=(
-    "bl1.bin"
-    "es_flashfw.bin"
-    "corstone1000-image-corstone1000-fvp.wic.nopt"
-    "corstone1000-flash-firmware-image-corstone1000-fvp.wic"
-    "cc312_otp.bin"
-)
-
-# Extract each file if it exists
-for file in "${FILES[@]}"; do
-    if docker cp "$CONTAINER_ID:$DEPLOY_DIR/$file" "$OUTPUT_DIR/" 2>/dev/null; then
-        echo "✓ Extracted $file"
-    else
-        echo "✗ $file not found, skipping"
+# Extract all files from the deploy directory and create symlinks locally
+echo "Extracting all files from deploy directory..."
+if docker cp "$CONTAINER_ID:$DEPLOY_DIR/." "$OUTPUT_DIR/" 2>/dev/null; then
+    echo "✓ Extracted all files from deploy directory"
+    
+    # Create a simplified symlink for the main wic file if it doesn't exist
+    cd "$OUTPUT_DIR"
+    if [ ! -f "corstone1000-esp-image-corstone1000-fvp.wic" ] && ls corstone1000-esp-image-corstone1000-fvp-*.wic 1> /dev/null 2>&1; then
+        ln -sf corstone1000-esp-image-corstone1000-fvp-*.wic corstone1000-esp-image-corstone1000-fvp.wic
+        echo "✓ Created symlink for main wic file"
     fi
-done
+    cd - > /dev/null
+else
+    echo "✗ Failed to extract files from deploy directory"
+fi
 
 # Clean up the temporary container
 docker rm "$CONTAINER_ID" >/dev/null
@@ -76,7 +67,7 @@ docker run -it --rm \\
   -C se.trustedBootROMloader.fname='/images/bl1.bin' \\
   -C se.trustedSRAM_config=6 \\
   -C se.BootROM_config='3' \\
-  --data board.flash0='/images/corstone1000-image-corstone1000-fvp.wic.nopt@0x68050000' \\
+  --data board.flash0='/images/corstone1000-esp-image-corstone1000-fvp.wic@0x68050000' \\
   -C board.xnvm_size=64 \\
   -C board.smsc_91c111.enabled=1 \\
   -C board.hostbridge.userNetworking=true \\

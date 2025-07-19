@@ -48,7 +48,7 @@ docker run -it --rm \\
   -C se.trustedBootROMloader.fname='/images/bl1.bin' \\
   -C se.trustedSRAM_config=6 \\
   -C se.BootROM_config='3' \\
-  --data board.flash0='/images/corstone1000-image-corstone1000-fvp.wic.nopt@0x68050000' \\
+  --data board.flash0='/images/corstone1000-esp-image-corstone1000-fvp.wic@0x68050000' \\
   -C board.xnvm_size=64 \\
   -C board.smsc_91c111.enabled=1 \\
   -C board.hostbridge.userNetworking=true \\
