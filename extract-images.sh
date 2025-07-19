@@ -13,8 +13,9 @@ echo "This will take a significant amount of time (30-60 minutes or more)"
 echo "Output will be saved to: $OUTPUT_DIR"
 echo ""
 
-# Build the Docker image (if not already built)
-if ! docker build -f build-yocto.Dockerfile -t "$IMAGE_NAME" .; then
+# Build the Docker image using BuildKit for cache mount support
+echo "Building with Docker BuildKit for optimized caching..."
+if ! DOCKER_BUILDKIT=1 docker build -f build-yocto.Dockerfile -t "$IMAGE_NAME" .; then
     echo "Error: Failed to build Docker image" >&2
     exit 1
 fi

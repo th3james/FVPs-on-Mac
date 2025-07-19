@@ -46,8 +46,8 @@ RUN pip3 install kas
 
 # Create build user (Yocto doesn't like running as root)
 RUN useradd -m -s /bin/bash builder && \
-    mkdir -p /workspace && \
-    chown builder:builder /workspace
+    mkdir -p /workspace /workspace/downloads /workspace/sstate-cache && \
+    chown -R builder:builder /workspace
 
 USER builder
 WORKDIR /workspace
@@ -63,5 +63,14 @@ RUN git config --global user.email "builder@example.com" && \
 ENV FVP_CORSTONE1000_EULA_ACCEPT=True
 ENV ARM_FVP_EULA_ACCEPT=1
 
-# Build the Corstone-1000 FVP images
-RUN kas build meta-arm/kas/corstone1000-fvp.yml:meta-arm/ci/debug.yml
+# Configure Yocto to use cache directories
+ENV DL_DIR=/workspace/downloads
+ENV SSTATE_DIR=/workspace/sstate-cache
+
+# Copy custom kas configuration for full Linux system build into meta-arm repo
+COPY corstone1000-full-fvp.yml /workspace/meta-arm/kas/
+
+# Build the Corstone-1000 FVP images with cache mounts for downloads and sstate
+RUN --mount=type=cache,target=/workspace/downloads,uid=1000,gid=1000 \
+    --mount=type=cache,target=/workspace/sstate-cache,uid=1000,gid=1000 \
+    kas build meta-arm/kas/corstone1000-full-fvp.yml:meta-arm/ci/debug.yml
